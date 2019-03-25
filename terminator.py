@@ -101,7 +101,7 @@ class UTUBE:
         matches = list(re.findall(patern , rawhtml))
         videos , num = self.final_video_urls(matches)
         self.set_files_generator(playlist_id,videos)
-        return videos , num
+        return videos, num
 
 
     def title_for_url (self , video_url):
@@ -163,35 +163,41 @@ class UTUBE:
                 #for audio
                 pass
 
-
     def video_download(self ,video_url,itag,playlist_id):
         YouTube(video_url).streams.get_by_itag(itag).download(os.path.join(self.download_dir, playlist_id))
 
-    def single_video_downloader(self ,video_url,typee,formatt,res,playlist_id):
-        streams = self.video_streams(video_url)
-        itag , resol = self.stream_picker(streams,typee,formatt,res)
-        self.video_download(video_url,itag,playlist_id)
-        return resol
-
-
+    # this function return a status code of it's download condition, True for success
+    # and False for failure
+    def single_video_downloader(self, video_url, typee, formatt, res, playlist_id, download_id):
+        # download_id is the index of that video in our download list.
+        print(f"Downloading video-{download_id} in {res} with format of {formatt}")
+        try:
+            streams = self.video_streams(video_url)
+            itag , resol = self.stream_picker(streams, typee, formatt, res)
+            self.video_download(video_url, itag, playlist_id)
+            isDownloaded = True
+            print(f" Succeeded, Downloading video-{download_id} in {res} with format of {formatt}")
+        except:
+            isDownloaded = False
+            resol = None
+            print(f" Failed, Downloading video-{download_id} in {res} with format of {formatt}")
+        return resol, isDownloaded
 
     def list_Terminator(self , Sub):
 
         pi = self.get_play_list_id()
-        videos , number = self.get_video_urls(pi)
+        videos, number = self.get_video_urls(pi)
 
 
         print("there are {} videos in this playlist".format(number))
 
         print("Getting streams, please wait ... ")
-
         pool = ThreadPool(processes=16)
         res = pool.map_async(self.title_for_url, (videos[i] for i in range(len(videos))))
         streams = res.get()
 
         for i in range(len(streams)):
             print(str(i+1)+"-"+streams[i])
-
 
 
         select = input("Enter Number of videos you want with '-' between:")
@@ -203,19 +209,18 @@ class UTUBE:
             s = 0
             formatt=input("what format do you want:")
             ress = input("what resolotion do you want:")
-            for i in range(len(videos)):
-                try:
-                    resol = self.single_video_downloader(videos[i],'video',formatt,ress,pi)
-                    print(bcolors.OKGREEN+'{}-link:{}-done!'.format(i+1,videos[i]))
-                    print(bcolors.OKGREEN+'res='+resol)
-                    print(bcolors.OKGREEN+"########################")
-                    s += 1
-                except Exception as err:
-                    print(bcolors.FAIL+'{}-link:{}-error!'.format(i+1,videos[i]))
-                    print(bcolors.FAIL+str(err))
-                    print(bcolors.FAIL+"########################")
-                    e += 1
-            print("there was {} seccess and {} failiur in list".format(s , e))
+            import time
+            t1 = time.time()
+            pool = ThreadPool(processes=4)
+            res = pool.starmap_async(
+                self.single_video_downloader,
+                ((videos[i], 'video', formatt, ress, pi, i) for i in range(len(videos)))
+            )
+
+            res = res.get()
+            print(res)
+            print(time.time() - t1)
+
         elif (not Sub) and (select != '0'):
             #downloading choosen items without sub
             pass
